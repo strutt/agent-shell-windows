@@ -38,13 +38,9 @@
           (text (alist-get 'text (aref (alist-get 'content result) 0)))
           (view (json-parse-string text :object-type 'alist)))
      (should-not (alist-get 'isError result))
-     (should (= 2 (length (alist-get 'panes view)))))
-   (let* ((reply (agent-shell-windows-http--call-tool session '((name . "get_view"))))
-          (view (json-parse-string
-                 (alist-get 'text (aref (alist-get 'content reply) 0)) :object-type 'alist)))
-     (should (= 2 (length (alist-get 'panes view)))))
-   (should-error (agent-shell-windows-http--call-tool
-                  session '((name . "get_view") (arguments . ((pane . 1))))))
+     (should (equal '((status . "visible") (count . 2)) view))
+     (should (equal "one.el" (agent-shell-windows-test--file session 1)))
+     (should (equal "two.el" (agent-shell-windows-test--file session 2))))
    (let ((reply (agent-shell-windows-http--call-tool
                  session '((name . "show_files") (arguments . ((panes . [])))))))
      (should (alist-get 'isError reply)))))
@@ -193,3 +189,8 @@
         (should-error (agent-shell-windows-http--ensure))
         (should (eq first agent-shell-windows-http--server))
         (should (process-live-p (ws-process first)))))))
+
+(ert-deftest agent-shell-windows-advertises-only-show-files ()
+  (should (equal '("show_files")
+                 (mapcar (lambda (tool) (alist-get 'name tool))
+                         (append agent-shell-windows-http--tools nil)))))

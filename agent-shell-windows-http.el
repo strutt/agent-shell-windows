@@ -62,17 +62,13 @@ Changes take effect on the next agent startup or connection setup."
                  (required . ["pane" "file" "highlights" "viewport"])
                  (additionalProperties . :json-false))))
     `[((name . "show_files")
-       (description . "Replace this conversation's entire file display in one call. Supply 1 to 3 complete panes, ordered and numbered 1, 2, 3. Each call specifies every file, all highlights, and viewport.top_line; omitted panes close. Emacs chooses layout: 1 standard split; 2 subdivides the file area; 3 a 2×2 grid with chat. Use [] to clear a pane's highlights. Hidden sessions retain the latest complete display until you return. Returns all pane views. Cannot activate a stopped session.")
+       (description . "Replace this conversation's entire file display in one call. Supply 1 to 3 complete panes, ordered and numbered 1, 2, 3. Each call specifies every file, all highlights, and viewport.top_line; omitted panes close. Emacs chooses layout: 1 standard split; 2 subdivides the file area; 3 a 2×2 grid with chat. Use [] to clear a pane's highlights. Hidden sessions retain the latest complete display until you return. Returns display status and pane count. Cannot activate a stopped session.")
        (inputSchema . ((type . "object")
                        (properties . ((panes . ((type . "array") (minItems . 1) (maxItems . 3)
                                                 (items . ,pane)))))
                        (required . ["panes"])
                        (additionalProperties . :json-false)))
-       (annotations . ((destructiveHint . :json-false) (openWorldHint . :json-false))))
-      ((name . "get_view")
-       (description . "Read every configured pane of this conversation, including actual visible live text, unsaved status, mode, cursor, and highlights. Reports empty, hidden, closed, or stopped per pane. Use after the user scrolls or edits. Does not reveal hidden sessions or recreate closed panes.")
-       (inputSchema . ((type . "object") (additionalProperties . :json-false)))
-       (annotations . ((readOnlyHint . t) (openWorldHint . :json-false))))]))
+       (annotations . ((destructiveHint . :json-false) (openWorldHint . :json-false))))]))
 
 (defun agent-shell-windows-http--json (value)
   "Encode VALUE with the package's JSON boolean convention."
@@ -108,9 +104,7 @@ Changes take effect on the next agent startup or connection setup."
      (alist-get 'required schema))
     (condition-case err
         (let ((result
-               (pcase name
-                 ("show_files" (agent-shell-windows--show-files session arguments))
-                 ("get_view" (agent-shell-windows--get-views session)))))
+               (agent-shell-windows--show-files session arguments)))
           `((content . [((type . "text")
                          (text . ,(agent-shell-windows-http--json result)))])))
       ((error quit)
@@ -138,7 +132,6 @@ Changes take effect on the next agent startup or connection setup."
                          "Highlight endpoints are [line, character], starting at [1, 0], with exclusive ends. "
                          "Use an empty highlight array to clear highlights. "
                          "Emacs chooses the file's mode. Create files with your normal file tools. "
-                         "Use get_view with no arguments to read all panes' visible live text after navigation or edits. "
                          "Hidden sessions retain the latest complete display until the user returns. "
                          "The user controls viewing with agent-shell-windows-start and agent-shell-windows-stop in Emacs."))))
     ("ping" (make-hash-table :test #'equal))

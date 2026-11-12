@@ -14,6 +14,7 @@
 
 (require 'cl-lib)
 (require 'subr-x)
+(require 'autorevert)
 (require 'agent-shell)
 
 (defgroup agent-shell-windows nil
@@ -571,9 +572,10 @@ Leave the frame unchanged until the session requests a display."
     real))
 
 (defun agent-shell-windows--file-buffer (session file &optional id)
-  "Return FILE's normal buffer for SESSION, refreshing clean text."
+  "Return FILE's normal buffer for SESSION with automatic disk refresh."
   (let ((base (or (find-buffer-visiting file) (find-file-noselect file))))
     (with-current-buffer base
+      (auto-revert-mode 1)
       (when (and (not (buffer-modified-p)) (not (verify-visited-file-modtime base)))
         (revert-buffer t t)))
     (let ((pane (agent-shell-windows--pane session id)))
@@ -590,12 +592,6 @@ Coordinates past the end of the line or buffer clamp to the line."
   (forward-line (1- (aref coordinates 0)))
   (goto-char (min (+ (point) (aref coordinates 1)) (line-end-position)))
   (point))
-
-(defun agent-shell-windows--coordinates (position)
-  "Return [line, character] coordinates for POSITION in the current buffer."
-  (save-excursion
-    (goto-char position)
-    (vector (line-number-at-pos position t) (- position (line-beginning-position)))))
 
 (defun agent-shell-windows--show-file (session arguments)
   "Display ARGUMENTS in SESSION, or retain them while it is hidden."
@@ -638,7 +634,7 @@ Coordinates past the end of the line or buffer clamp to the line."
 		(set-window-start window (point))))))
         (setf (agent-shell-windows--pane-request pane) nil)))
     (agent-shell-windows--save session)
-    (agent-shell-windows--get-view session id)))
+    `((status . ,(if (agent-shell-windows--shell-window session) "visible" "hidden")))))
 
 (defun agent-shell-windows--validate-request (session request id)
   "Validate one complete pane REQUEST for SESSION at position ID."
@@ -675,74 +671,8 @@ Coordinates past the end of the line or buffer clamp to the line."
     (save-selected-window
       (agent-shell-windows--set-panes session (length requests))
       (mapc (lambda (request) (agent-shell-windows--show-file session request)) requests))
-    (agent-shell-windows--get-views session)))
-
-(defun agent-shell-windows--get-views (session)
-  "Read all of SESSION's configured panes without revealing hidden views."
-  `((status . ,(cond ((not (agent-shell-windows--session-active session)) "stopped")
-                     ((not (agent-shell-windows--shell-window session)) "hidden")
-                     (t "visible")))
-    (panes . ,(vconcat
-               (cl-loop for id from 1 to (agent-shell-windows--session-count session)
-                        collect (agent-shell-windows--get-view session id))))))
-
-(defun agent-shell-windows--visible-text (window start end)
-  "Return WINDOW's text from START to END, replacing folded spans."
-  (with-selected-window window
-    (let ((position start) pieces hidden)
-      (while (< position end)
-        (let* ((next (next-char-property-change position end))
-               (invisible (invisible-p position)))
-          (push (cond ((and invisible (not hidden)) "…")
-                      (invisible "")
-                      (t (buffer-substring-no-properties position next)))
-                pieces)
-          (setq position next hidden invisible)))
-      (apply #'concat (nreverse pieces)))))
-
-(defun agent-shell-windows--get-view (session &optional id)
-  "Read SESSION's actual visible live text, or report its state."
-  (let* ((pane (agent-shell-windows--pane session id))
-         (id (agent-shell-windows--pane-id pane))
-         (window (agent-shell-windows--display-window session id))
-         (status (cond ((not (agent-shell-windows--session-active session)) "stopped")
-                       ((not (agent-shell-windows--shell-window session)) "hidden")
-                       ((not (and window
-                                  (buffer-live-p (agent-shell-windows--pane-buffer pane))))
-                        "closed")
-                       (t "visible"))))
-    (if (not (equal status "visible"))
-        (list (cons 'pane id) (cons 'status status))
-      (with-current-buffer (window-buffer window)
-        (let* ((base (or (buffer-base-buffer) (current-buffer)))
-               (file (buffer-file-name base)))
-          (if (not file)
-              (list (cons 'pane id) (cons 'status "empty"))
-            (setq file (agent-shell-windows--check-file session file))
-            (redisplay t)
-            (save-restriction
-              (widen)
-              (let ((start (window-start window))
-                    (end (window-end window t)))
-		`((pane . ,id)
-                  (status . "visible")
-                  (file . ,(file-relative-name file (agent-shell-windows--session-root session)))
-                  (buffer . ,(buffer-name))
-                  (mode . ,(symbol-name major-mode))
-                  (modified . ,(if (buffer-modified-p) t :json-false))
-                  (cursor . ,(agent-shell-windows--coordinates (window-point window)))
-                  (visible . ((start . ,(agent-shell-windows--coordinates start))
-                              (end . ,(agent-shell-windows--coordinates end))
-                              (text . ,(agent-shell-windows--visible-text window start end))))
-                  (highlights .
-                              ,(vconcat
-				(mapcar
-				 (lambda (overlay)
-                                   `((start . ,(agent-shell-windows--coordinates (overlay-start overlay)))
-                                     (end . ,(agent-shell-windows--coordinates (overlay-end overlay)))))
-				 (cl-remove-if-not
-                                  (lambda (overlay) (eq (overlay-buffer overlay) (current-buffer)))
-                                  (reverse (agent-shell-windows--pane-overlays pane)))))))))))))))
+    `((status . ,(if (agent-shell-windows--shell-window session) "visible" "hidden"))
+      (count . ,(length requests)))))
 
 (provide 'agent-shell-windows)
 ;;; agent-shell-windows.el ends here

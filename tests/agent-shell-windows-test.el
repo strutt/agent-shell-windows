@@ -36,6 +36,12 @@
     (unwind-protect
         (progn
           (should (eq base (agent-shell-windows--file-buffer session file)))
+          (with-current-buffer base
+            (should auto-revert-mode)
+            (with-temp-file file (insert ";;; Changed by agent\n"))
+            (set-file-times file (time-add (current-time) 2))
+            (auto-revert-handler)
+            (should (equal ";;; Changed by agent\n" (buffer-string))))
           (should-not (buffer-base-buffer (agent-shell-windows--pane-buffer (agent-shell-windows--pane session))))
           (with-current-buffer base
             (goto-char (point-max))
@@ -101,8 +107,8 @@
             (cl-letf (((symbol-function 'agent-shell-windows--ensure-server) #'ignore))
               (let ((session (agent-shell-windows-start))
                     (before (current-window-configuration)))
-                ;; Reading state must not count as a request to display files.
-                (agent-shell-windows--get-views session)
+                ;; Allocating pane state must not request a display.
+                (agent-shell-windows--pane session)
                 (agent-shell-windows-start)
                 (agent-shell-windows--switch-buffer (lambda () (current-buffer)))
                 (agent-shell-windows--display-buffer (lambda (_) (selected-window))
@@ -115,6 +121,8 @@
                                       (viewport . ((top_line . 1))))])))
                 (should (= 1 (length (agent-shell-windows--windows session))))
                 (should (equal (file-name-nondirectory file)
-                               (alist-get 'file (agent-shell-windows--get-view session)))))))
+                               (file-name-nondirectory
+                                (buffer-file-name
+                                 (window-buffer (agent-shell-windows--display-window session)))))))))
         (when-let* ((buffer (find-buffer-visiting file))) (kill-buffer buffer))
         (delete-file file)))))

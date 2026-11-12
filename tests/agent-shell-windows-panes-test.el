@@ -46,6 +46,11 @@
              (highlights . [((start . [2 0]) (end . [3 0]))])
              (viewport . ((top_line . ,line))))))
 
+(defun agent-shell-windows-test--file (session id)
+  "Return the file name actually displayed in SESSION's pane ID."
+  (file-name-nondirectory
+   (buffer-file-name (window-buffer (agent-shell-windows--display-window session id)))))
+
 (ert-deftest agent-shell-windows-pane-count-layouts ()
   (agent-shell-windows-test--with-session
    (let ((chat-edges (window-edges (agent-shell-windows--shell-window session))))
@@ -91,25 +96,22 @@
      (should-not (eq (car (agent-shell-windows--pane-overlays one))
                      (car (agent-shell-windows--pane-overlays two))))
      (dolist (id '(1 2))
-       (let ((view (agent-shell-windows--get-view session id)))
-         (should (equal "visible" (alist-get 'status view)))
-         (should (= id (alist-get 'pane view)))
-         (should (equal "one.el" (alist-get 'file view))))))
+       (should (equal "one.el" (agent-shell-windows-test--file session id)))))
    (agent-shell-windows-test--show session 2 "two.el" 30)
-   (should (equal "one.el" (alist-get 'file (agent-shell-windows--get-view session))))
-   (should (equal "two.el" (alist-get 'file (agent-shell-windows--get-view session 2))))))
+   (should (equal "one.el" (agent-shell-windows-test--file session 1)))
+   (should (equal "two.el" (agent-shell-windows-test--file session 2)))))
 
 (ert-deftest agent-shell-windows-pane-validation ()
   (agent-shell-windows-test--with-session
    (dolist (count '(0 4 -1 1.5 "2" nil))
      (should-error (agent-shell-windows--set-panes session count)))
    (dolist (id '(0 2 4 -1 1.5 "1"))
-     (should-error (agent-shell-windows--get-view session id)))
-   (should (= 1 (alist-get 'pane (agent-shell-windows--get-view session))))
+     (should-error (agent-shell-windows--pane session id)))
+   (should (= 1 (agent-shell-windows--pane-id (agent-shell-windows--pane session))))
    (setf (agent-shell-windows--session-active session) nil)
    (should-error (agent-shell-windows--set-panes session 2))
    (should-error (agent-shell-windows-test--show session 1 "one.el" 1))
-   (should (equal "stopped" (alist-get 'status (agent-shell-windows--get-view session))))))
+   (should-not (agent-shell-windows--session-active session))))
 
 (ert-deftest agent-shell-windows-hidden-panes-queue-separately ()
   (agent-shell-windows-test--with-session
@@ -124,11 +126,11 @@
            (agent-shell-windows-test--show session 2 "two.el" 40)
            (agent-shell-windows--set-panes session 3)
            (should (eq away (window-buffer (selected-window))))
-           (should (equal "hidden" (alist-get 'status (agent-shell-windows--get-view session 2))))
+           (should-not (agent-shell-windows--shell-window session))
            (agent-shell-windows--enter session (current-window-configuration) nil)
            (should (= 3 (length (agent-shell-windows--windows session))))
-           (should (equal "one.el" (alist-get 'file (agent-shell-windows--get-view session 1))))
-           (should (equal "two.el" (alist-get 'file (agent-shell-windows--get-view session 2)))))
+           (should (equal "one.el" (agent-shell-windows-test--file session 1)))
+           (should (equal "two.el" (agent-shell-windows-test--file session 2))))
        (kill-buffer away)))))
 
 (ert-deftest agent-shell-windows-pane-layout-rolls-back-on-small-frame ()
@@ -142,7 +144,7 @@
        (should-error (agent-shell-windows--set-panes session 3))))
    (should (= 1 (agent-shell-windows--session-count session)))
    (should (= 1 (length (agent-shell-windows--windows session))))
-   (should (equal "one.el" (alist-get 'file (agent-shell-windows--get-view session))))
+   (should (equal "one.el" (agent-shell-windows-test--file session 1)))
    (let ((overlay (car (agent-shell-windows--pane-overlays (agent-shell-windows--pane session)))))
      (should (eq (overlay-get overlay 'window) (agent-shell-windows--display-window session))))))
 
@@ -153,7 +155,7 @@
    (let ((overlay (car (agent-shell-windows--pane-overlays (agent-shell-windows--pane session 3)))))
      (agent-shell-windows--set-panes session 1)
      (should-not (overlay-buffer overlay))
-     (should-error (agent-shell-windows--get-view session 3))
+     (should-error (agent-shell-windows--pane session 3))
      (should (buffer-live-p (find-buffer-visiting (expand-file-name "one.el" root)))))))
 
 (defun agent-shell-windows-test--requests (&rest files)
@@ -169,12 +171,10 @@
      (agent-shell-windows--show-files
       session `((panes . ,(agent-shell-windows-test--requests "one.el" "two.el" "one.el"))))
      (should (eq selected (selected-window))))
-   (should (= 3 (length (alist-get 'panes (agent-shell-windows--get-views session)))))
+   (should (= 3 (length (agent-shell-windows--windows session))))
    (agent-shell-windows--show-files
     session `((panes . ,(agent-shell-windows-test--requests "two.el"))))
-   (let ((views (alist-get 'panes (agent-shell-windows--get-views session))))
-     (should (= 1 (length views)))
-     (should (equal "two.el" (alist-get 'file (aref views 0)))))
+   (should (equal "two.el" (agent-shell-windows-test--file session 1)))
    (should (= 1 (length (agent-shell-windows--windows session))))))
 
 (ert-deftest agent-shell-windows-show-files-validates-before-changing-display ()
@@ -186,7 +186,7 @@
                            (agent-shell-windows-test--requests "two.el" "../outside.el")))
      (should-error (agent-shell-windows--show-files session `((panes . ,requests))))
      (should (= 1 (agent-shell-windows--session-count session)))
-     (should (equal "one.el" (alist-get 'file (agent-shell-windows--get-view session)))))
+     (should (equal "one.el" (agent-shell-windows-test--file session 1))))
    (let ((requests (agent-shell-windows-test--requests "one.el" "two.el")))
      (setf (alist-get 'pane (aref requests 1)) 1)
      (should-error (agent-shell-windows--show-files session `((panes . ,requests)))))
@@ -207,12 +207,10 @@
            (agent-shell-windows--show-files
             session `((panes . ,(agent-shell-windows-test--requests "two.el" "one.el"))))
            (should (eq away (window-buffer (selected-window))))
-           (should (equal "hidden" (alist-get 'status (agent-shell-windows--get-views session))))
+           (should-not (agent-shell-windows--shell-window session))
            (agent-shell-windows--enter session (current-window-configuration) nil)
-           (let ((panes (alist-get 'panes (agent-shell-windows--get-views session))))
-             (should (= 2 (length panes)))
-             (should (equal "two.el" (alist-get 'file (aref panes 0))))
-             (should (equal "one.el" (alist-get 'file (aref panes 1)))))
+           (should (equal "two.el" (agent-shell-windows-test--file session 1)))
+           (should (equal "one.el" (agent-shell-windows-test--file session 2)))
            (should (= 2 (length (agent-shell-windows--windows session)))))
        (kill-buffer away)))))
 
@@ -222,10 +220,10 @@
     session `((panes . ,(agent-shell-windows-test--requests "one.el" "two.el" "one.el"))))
    (agent-shell-windows--save session)
    (delete-window (agent-shell-windows--display-window session 2))
-   (should (equal "closed" (alist-get 'status (agent-shell-windows--get-view session 2))))
+   (should-not (agent-shell-windows--display-window session 2))
    (agent-shell-windows--switch-buffer (lambda () (switch-to-buffer shell)))
    (should (= 3 (length (agent-shell-windows--windows session))))
-   (should (equal "two.el" (alist-get 'file (agent-shell-windows--get-view session 2))))))
+   (should (equal "two.el" (agent-shell-windows-test--file session 2)))))
 
 
 (ert-deftest agent-shell-windows-switch-from-dedicated-pane ()
@@ -256,11 +254,11 @@
            (agent-shell-windows--enter session (current-window-configuration) second)
            (should (= 2 (length (agent-shell-windows--windows session))))
            (should-not (agent-shell-windows--windows second))
-           (should (equal "one.el" (alist-get 'file (agent-shell-windows--get-view session 1))))
+           (should (equal "one.el" (agent-shell-windows-test--file session 1)))
            (agent-shell-windows--enter second (current-window-configuration) session)
            (should (= 3 (length (agent-shell-windows--windows second))))
            (should-not (agent-shell-windows--windows session))
-           (should (equal "two.el" (alist-get 'file (agent-shell-windows--get-view second 1)))))
+           (should (equal "two.el" (agent-shell-windows-test--file second 1))))
        (mapc (lambda (pane) (mapc #'delete-overlay (agent-shell-windows--pane-overlays pane)))
              (agent-shell-windows--session-panes second))
        (kill-buffer shell-two)))))
