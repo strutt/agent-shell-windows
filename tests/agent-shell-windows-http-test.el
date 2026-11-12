@@ -18,7 +18,7 @@
                 (should (agent-shell-windows--session-active session))
                 (should (equal (file-name-as-directory (file-truename default-directory))
                                (agent-shell-windows--session-root session)))
-                (should (agent-shell-windows--display-window session))
+                (should-not (agent-shell-windows--display-window session))
                 (setq placeholder (agent-shell-windows--pane-buffer
                                    (agent-shell-windows--pane session)))
                 (should (equal servers (agent-shell-windows--mcp-servers servers)))

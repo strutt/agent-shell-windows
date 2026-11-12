@@ -44,7 +44,7 @@ I don't trust agents enough to give them routine access to my
 credentials or my Emacs. Emacs contains the keys to my kingdom. To
 avoid using emacsclient, agent-shell-windows starts a local web server
 on http://localhost:8765/mcp. The server limits that agent to opening
-files.
+files in those windows and reading the live unsaved content.
 
 Agents that aren't in containers have access to your cli. Their
 commands use YOUR credentials. They'll promise they would never, ever
@@ -68,5 +68,8 @@ only listens on localhost (127.0.0.1).
 
 ```elisp
 (setq agent-shell-windows-http-hosts
-      '("127.0.0.1"))
+      '("127.0.0.1" "172.17.0.1"))
 ```
+
+Here, `172.17.0.1` is an example Docker bridge IP; replace it with your
+host's Docker bridge address.

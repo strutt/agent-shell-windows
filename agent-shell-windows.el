@@ -190,6 +190,14 @@ error the shell proceeds without file viewing."
   (cl-loop for id from 1 to (agent-shell-windows--session-count session)
            always (agent-shell-windows--display-window session id)))
 
+(defun agent-shell-windows--has-display-p (session)
+  "Return non-nil when SESSION has a saved or requested display."
+  (or (agent-shell-windows--session-configuration session)
+      (cl-some (lambda (pane)
+                 (or (agent-shell-windows--pane-buffer pane)
+                     (agent-shell-windows--pane-request pane)))
+               (append (agent-shell-windows--session-panes session) nil))))
+
 (defun agent-shell-windows--buffer-session (buffer)
   "Return BUFFER's association, resolving an agent-shell viewport if needed."
   (when (buffer-live-p buffer)
@@ -271,7 +279,8 @@ error the shell proceeds without file viewing."
     (agent-shell-windows--save outgoing)
     (let* ((buffer (apply original arguments))
            (incoming (agent-shell-windows--buffer-session buffer)))
-      (if (and incoming (agent-shell-windows--session-active incoming))
+      (if (and incoming (agent-shell-windows--session-active incoming)
+             (agent-shell-windows--has-display-p incoming))
           (agent-shell-windows--enter incoming before outgoing)
         (when incoming
           (setf (agent-shell-windows--session-previous incoming) before))
@@ -287,7 +296,8 @@ error the shell proceeds without file viewing."
         (outgoing (agent-shell-windows--visible-session))
         (before (current-window-configuration)))
     (agent-shell-windows--save outgoing)
-    (if (and incoming (agent-shell-windows--session-active incoming))
+    (if (and incoming (agent-shell-windows--session-active incoming)
+             (agent-shell-windows--has-display-p incoming))
         (agent-shell-windows--enter incoming before outgoing)
       (when incoming
         (setf (agent-shell-windows--session-previous incoming) before))
@@ -317,7 +327,8 @@ error the shell proceeds without file viewing."
                        (car (agent-shell-project-buffers))
                        (car (agent-shell-buffers)))))
          (session (agent-shell-windows--buffer-session buffer)))
-    (if (and session (agent-shell-windows--session-active session))
+    (if (and session (agent-shell-windows--session-active session)
+             (agent-shell-windows--has-display-p session))
         (if (agent-shell-windows--shell-window session)
             (agent-shell-windows--hide session)
           (let ((before (current-window-configuration))
@@ -500,7 +511,8 @@ error the shell proceeds without file viewing."
 
 ;;;###autoload
 (defun agent-shell-windows-start (&optional shell)
-  "Activate file viewing for SHELL, or the current agent-shell buffer."
+  "Activate file viewing for SHELL, or the current agent-shell buffer.
+Leave the frame unchanged until the session requests a display."
   (interactive (list (agent-shell-windows--read-shell)))
   (let ((before (current-window-configuration))
         (outgoing (agent-shell-windows--visible-session)))
@@ -521,9 +533,10 @@ error the shell proceeds without file viewing."
                       (window-frame window))
                     (selected-frame))))
         (setf (agent-shell-windows--session-active session) t)
-        (if (and (not initial) (agent-shell-windows--shell-window session))
-            (agent-shell-windows--layout session nil)
-          (agent-shell-windows--enter session before outgoing))
+        (when (agent-shell-windows--has-display-p session)
+          (if (and (not initial) (agent-shell-windows--shell-window session))
+              (agent-shell-windows--layout session nil)
+            (agent-shell-windows--enter session before outgoing)))
         session))))
 
 ;;;###autoload

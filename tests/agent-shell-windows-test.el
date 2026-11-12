@@ -70,3 +70,51 @@
           (when (buffer-live-p placeholder) (kill-buffer placeholder))
           (kill-buffer other)
           (kill-buffer shell))))))
+
+(ert-deftest agent-shell-windows-start-without-panes-preserves-frame ()
+  (save-window-excursion
+    (let ((agent-shell-windows--sessions (make-hash-table :test #'equal)))
+      (with-temp-buffer
+        (setq major-mode 'agent-shell-mode)
+        (delete-other-windows)
+        (split-window-right)
+        (let ((before (current-window-configuration)))
+          (cl-letf (((symbol-function 'agent-shell-windows--ensure-server) #'ignore))
+            (let ((session (agent-shell-windows-start)))
+              (should (agent-shell-windows--session-active session))
+              (should (compare-window-configurations before (current-window-configuration)))
+              (should-not (agent-shell-windows--windows session))
+              (agent-shell-windows-start)
+              (should (compare-window-configurations before (current-window-configuration))))))))))
+
+(ert-deftest agent-shell-windows-first-request-creates-display ()
+  (save-window-excursion
+    (let* ((agent-shell-windows--sessions (make-hash-table :test #'equal))
+           (file (make-temp-file "asw-first-request-" nil ".el" ";; First request\n"))
+           (default-directory (file-name-directory file))
+           (split-height-threshold nil)
+           (split-width-threshold 0))
+      (unwind-protect
+          (with-temp-buffer
+            (setq major-mode 'agent-shell-mode)
+            (switch-to-buffer (current-buffer))
+            (cl-letf (((symbol-function 'agent-shell-windows--ensure-server) #'ignore))
+              (let ((session (agent-shell-windows-start))
+                    (before (current-window-configuration)))
+                ;; Reading state must not count as a request to display files.
+                (agent-shell-windows--get-views session)
+                (agent-shell-windows-start)
+                (agent-shell-windows--switch-buffer (lambda () (current-buffer)))
+                (agent-shell-windows--display-buffer (lambda (_) (selected-window))
+                                                   (current-buffer))
+                (should (compare-window-configurations before (current-window-configuration)))
+                (agent-shell-windows--show-files
+                 session `((panes . [((pane . 1)
+                                      (file . ,(file-name-nondirectory file))
+                                      (highlights . [])
+                                      (viewport . ((top_line . 1))))])))
+                (should (= 1 (length (agent-shell-windows--windows session))))
+                (should (equal (file-name-nondirectory file)
+                               (alist-get 'file (agent-shell-windows--get-view session)))))))
+        (when-let* ((buffer (find-buffer-visiting file))) (kill-buffer buffer))
+        (delete-file file)))))
