@@ -2,6 +2,31 @@
 (require 'agent-shell-windows-http)
 (require 'agent-shell-windows-panes-test)
 
+(ert-deftest agent-shell-windows-connection-activates-once-and-preserves-stop ()
+  (save-window-excursion
+    (let ((agent-shell-windows--sessions (make-hash-table :test #'equal))
+          (split-height-threshold nil)
+          (split-width-threshold 0)
+          placeholder)
+      (with-temp-buffer
+        (setq major-mode 'agent-shell-mode)
+        (cl-letf (((symbol-function 'agent-shell-windows--ensure-server) #'ignore))
+          (unwind-protect
+              (let* ((servers (agent-shell-windows--mcp-servers []))
+                     (session agent-shell-windows--session))
+                (should (= 1 (length servers)))
+                (should (agent-shell-windows--session-active session))
+                (should (equal (file-name-as-directory (file-truename default-directory))
+                               (agent-shell-windows--session-root session)))
+                (should (agent-shell-windows--display-window session))
+                (setq placeholder (agent-shell-windows--pane-buffer
+                                   (agent-shell-windows--pane session)))
+                (should (equal servers (agent-shell-windows--mcp-servers servers)))
+                (agent-shell-windows-stop)
+                (should (equal servers (agent-shell-windows--mcp-servers servers)))
+                (should-not (agent-shell-windows--session-active session)))
+            (when (buffer-live-p placeholder) (kill-buffer placeholder))))))))
+
 (ert-deftest agent-shell-windows-http-complete-display-round-trip ()
   (agent-shell-windows-test--with-session
    (let* ((requests (agent-shell-windows-test--requests "one.el" "two.el"))

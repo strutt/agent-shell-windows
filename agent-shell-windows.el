@@ -113,6 +113,10 @@ error the shell proceeds without file viewing."
       (progn
         (agent-shell-windows--ensure-server)
         (let ((session (agent-shell-windows--register)))
+          ;; First activation assigns the root.  Preserve an explicit stop
+          ;; when the same conversation reconnects.
+          (unless (agent-shell-windows--session-root session)
+            (agent-shell-windows-start))
           (vconcat
            (cl-remove-if
             (lambda (server) (equal (alist-get 'name server) "agent-shell-windows"))
