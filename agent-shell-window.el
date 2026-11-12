@@ -155,9 +155,10 @@ error the shell proceeds without file viewing."
    (hash-table-values agent-shell-window--sessions)))
 
 (defun agent-shell-window--save (session)
-  "Save an active, visible SESSION's current window configuration."
+  "Save an active SESSION's complete chat and display configuration."
   (when (and session (agent-shell-window--session-active session)
-             (agent-shell-window--shell-window session))
+             (agent-shell-window--shell-window session)
+             (agent-shell-window--display-window session))
     (setf (agent-shell-window--session-configuration session)
           (current-window-configuration (agent-shell-window--session-frame session)))))
 
@@ -200,6 +201,10 @@ error the shell proceeds without file viewing."
     (if-let ((configuration (agent-shell-window--session-configuration session)))
         (set-window-configuration configuration)
       (agent-shell-window--layout session t))
+    ;; Older snapshots, or snapshots whose view buffer was killed, may
+    ;; restore without the display pane.  Reuse the live view and its point.
+    (unless (agent-shell-window--display-window session)
+      (agent-shell-window--layout session nil))
     (agent-shell-window--refresh-view session)
     (agent-shell-window--shell-window session)))
 
@@ -300,6 +305,7 @@ error the shell proceeds without file viewing."
         (setf (agent-shell-window--session-window session) window)
         (dolist (overlay (agent-shell-window--session-overlays session))
           (overlay-put overlay 'window window))
+        (agent-shell-window--save session)
         window))))
 
 ;;;###autoload
