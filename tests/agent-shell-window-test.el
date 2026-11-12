@@ -28,3 +28,19 @@
           (kill-buffer (agent-shell-window--session-buffer session)))
         (kill-buffer shell)))))
 
+(ert-deftest agent-shell-window-uses-normal-file-buffer ()
+  (let* ((file (make-temp-file "agent-shell-window-test-" nil ".el" ";;; Example\n"))
+         (session (agent-shell-window--make-session))
+         (base (find-file-noselect file)))
+    (unwind-protect
+        (progn
+          (should (eq base (agent-shell-window--file-buffer session file)))
+          (should-not (buffer-base-buffer (agent-shell-window--session-buffer session)))
+          (with-current-buffer base
+            (goto-char (point-max))
+            (insert ";; Unsaved edit\n"))
+          (should (eq base (agent-shell-window--file-buffer session file)))
+          (should (buffer-modified-p base)))
+      (with-current-buffer base (set-buffer-modified-p nil))
+      (kill-buffer base)
+      (delete-file file))))

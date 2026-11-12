@@ -42,6 +42,12 @@ different address, such as http://host.docker.internal:8765/mcp."
 (declare-function agent-shell-project-buffers "agent-shell" ())
 (declare-function agent-shell-buffers "agent-shell" ())
 (declare-function agent-shell-viewport--buffer "agent-shell-viewport" (&rest arguments))
+(declare-function agent-shell--state "agent-shell" ())
+(declare-function agent-shell--make-header-model "agent-shell" (&rest arguments))
+(declare-function agent-shell--svg-header-geometry "agent-shell" (model))
+(declare-function agent-shell--fetch-agent-icon "agent-shell" (name))
+(declare-function agent-shell--make-agent-fallback-icon "agent-shell" (name width))
+(declare-function agent-shell--image-type-to-mime "agent-shell" (filename))
 
 (defun agent-shell-window--register ()
   "Return the current shell's routing association, creating it if needed."
@@ -165,10 +171,8 @@ error the shell proceeds without file viewing."
 (defun agent-shell-window--refresh-view (session)
   "Reattach SESSION's highlights and apply its pending file request."
   (agent-shell-window--display-window session)
-  (when-let ((view (agent-shell-window--session-buffer session)))
-    (when (buffer-live-p view)
-      (with-current-buffer view
-        (rename-buffer (agent-shell-window--buffer-name session) t))))
+  (when-let ((window (agent-shell-window--display-window session)))
+    (agent-shell-window--set-header session window))
   (when (and (agent-shell-window--session-active session)
              (agent-shell-window--session-request session))
     (condition-case err
@@ -276,9 +280,43 @@ error the shell proceeds without file viewing."
       (apply original arguments))))
 
 (defun agent-shell-window--buffer-name (session)
-  "Return the display buffer name for SESSION."
+  "Return the empty display buffer name for SESSION."
   (format "*agent-shell-window: %s*"
           (buffer-name (agent-shell-window--session-shell session))))
+
+(defun agent-shell-window--set-header (session window)
+  "Label WINDOW with SESSION's icon and a short title."
+  (when (and (fboundp 'agent-shell--make-header-model)
+             (fboundp 'agent-shell--svg-header-geometry))
+    (with-current-buffer (agent-shell-window--session-shell session)
+      (when (derived-mode-p 'agent-shell-mode)
+        (set-window-parameter
+         window 'header-line-format
+         (list
+          (if (and (display-graphic-p) (image-type-available-p 'svg))
+              (let* ((model (agent-shell--make-header-model (agent-shell--state)))
+                     (geometry (agent-shell--svg-header-geometry model))
+                     (icon (if (map-elt model :icon-name)
+                               (agent-shell--fetch-agent-icon (map-elt model :icon-name))
+                             (agent-shell--make-agent-fallback-icon
+                              (map-elt model :buffer-name) 100)))
+                     (height (map-elt geometry :total-height))
+                     (svg (progn (require 'svg)
+                                 (svg-create (window-pixel-width window) height))))
+                (when icon
+                  (svg-embed svg icon (agent-shell--image-type-to-mime icon) nil
+                             :x (map-elt geometry :icon-x)
+                             :y (map-elt geometry :icon-y)
+                             :width (map-elt geometry :image-width)
+                             :height (map-elt geometry :image-height)))
+                (svg-text svg "agent-shell-window"
+                          :x (map-elt geometry :icon-text-x)
+                          :y (+ (/ height 2) (/ (map-elt model :font-size) 3))
+                          :font-family (map-elt model :font-family)
+                          :font-size (map-elt model :font-size)
+                          :fill (face-foreground 'default nil t))
+                (propertize " " 'display (svg-image svg :scale 1)))
+            " agent-shell-window")))))))
 
 (defun agent-shell-window--layout (session initial)
   "Show SESSION's pair, creating an INITIAL layout when requested."
@@ -302,6 +340,7 @@ error the shell proceeds without file viewing."
         (set-window-parameter window 'agent-shell-window-session session)
         (set-window-dedicated-p window nil)
         (set-window-buffer window view)
+        (agent-shell-window--set-header session window)
         (setf (agent-shell-window--session-window session) window)
         (dolist (overlay (agent-shell-window--session-overlays session))
           (overlay-put overlay 'window window))
@@ -367,17 +406,13 @@ error the shell proceeds without file viewing."
     real))
 
 (defun agent-shell-window--file-buffer (session file)
-  "Return SESSION's own view of FILE's live text, refreshing clean text."
-  (let* ((base (or (find-buffer-visiting file) (find-file-noselect file)))
-         (view (agent-shell-window--session-buffer session)))
+  "Return FILE's normal buffer for SESSION, refreshing clean text."
+  (let ((base (or (find-buffer-visiting file) (find-file-noselect file))))
     (with-current-buffer base
       (when (and (not (buffer-modified-p)) (not (verify-visited-file-modtime base)))
-        (revert-buffer t t))
-      (unless (and (buffer-live-p view) (eq (buffer-base-buffer view) base))
-        (when (buffer-live-p view) (kill-buffer view))
-        (setq view (clone-indirect-buffer (agent-shell-window--buffer-name session) nil))
-        (setf (agent-shell-window--session-buffer session) view)))
-    view))
+        (revert-buffer t t)))
+    (setf (agent-shell-window--session-buffer session) base)
+    base))
 
 (defun agent-shell-window--position (coordinates)
   "Resolve [line, character] COORDINATES in the current buffer.
