@@ -72,19 +72,29 @@ different address, such as http://host.docker.internal:8765/mcp."
   (agent-shell-window-http--ensure))
 
 (defun agent-shell-window--mcp-servers (servers)
-  "Append this shell's MCP connection to normalized SERVERS."
-  (agent-shell-window--ensure-server)
-  (let ((session (agent-shell-window--register)))
-    (vconcat
-     (cl-remove-if
-      (lambda (server) (equal (alist-get 'name server) "agent-shell-window"))
-      (append servers nil))
-     (vector
-      `((name . "agent-shell-window")
-        (type . "http")
-        (url . ,agent-shell-window-mcp-url)
-        (headers . [((name . "X-Agent-Shell-Window-Session")
-                     (value . ,(agent-shell-window--session-id session)))]))))))
+  "Append this shell's MCP connection to normalized SERVERS.
+A failure here must not prevent the session from starting, so on
+error the shell proceeds without file viewing."
+  (condition-case err
+      (progn
+        (agent-shell-window--ensure-server)
+        (let ((session (agent-shell-window--register)))
+          (vconcat
+           (cl-remove-if
+            (lambda (server) (equal (alist-get 'name server) "agent-shell-window"))
+            (append servers nil))
+           (vector
+            `((name . "agent-shell-window")
+              (type . "http")
+              (url . ,agent-shell-window-mcp-url)
+              (headers . [((name . "X-Agent-Shell-Window-Session")
+                           (value . ,(agent-shell-window--session-id session)))]))))))
+    ((error quit)
+     (display-warning
+      'agent-shell-window
+      (format "File viewing is unavailable for this session: %s"
+              (error-message-string err)))
+     servers)))
 
 (with-eval-after-load 'agent-shell
   (advice-add 'agent-shell--mcp-servers :filter-return
@@ -160,7 +170,15 @@ different address, such as http://host.docker.internal:8765/mcp."
         (rename-buffer (agent-shell-window--buffer-name session) t))))
   (when (and (agent-shell-window--session-active session)
              (agent-shell-window--session-request session))
-    (agent-shell-window--show-file session (agent-shell-window--session-request session))))
+    (condition-case err
+        (agent-shell-window--show-file
+         session (agent-shell-window--session-request session))
+      ((error quit)
+       ;; A request that can no longer be displayed must not keep
+       ;; aborting every entry into the session.
+       (setf (agent-shell-window--session-request session) nil)
+       (message "agent-shell-window: dropped undisplayable view request (%s)"
+                (error-message-string err))))))
 
 (defun agent-shell-window--enter (session before outgoing)
   "Restore SESSION when leaving OUTGOING, with BEFORE as the prior layout."
@@ -356,10 +374,11 @@ different address, such as http://host.docker.internal:8765/mcp."
     view))
 
 (defun agent-shell-window--position (coordinates)
-  "Resolve [line, character] COORDINATES in the current buffer."
+  "Resolve [line, character] COORDINATES in the current buffer.
+Coordinates past the end of the line or buffer clamp to the line."
   (goto-char (point-min))
   (forward-line (1- (aref coordinates 0)))
-  (forward-char (aref coordinates 1))
+  (goto-char (min (+ (point) (aref coordinates 1)) (line-end-position)))
   (point))
 
 (defun agent-shell-window--coordinates (position)
@@ -433,7 +452,8 @@ different address, such as http://host.docker.internal:8765/mcp."
       (with-current-buffer (window-buffer window)
         (let* ((base (or (buffer-base-buffer) (current-buffer)))
                (file (buffer-file-name base)))
-          (unless file (user-error "The window has no file to read"))
+          (if (not file)
+              (list (cons 'status "empty"))
           (setq file (agent-shell-window--check-file session file))
           (redisplay t)
           (save-restriction
@@ -457,7 +477,7 @@ different address, such as http://host.docker.internal:8765/mcp."
                                    (end . ,(agent-shell-window--coordinates (overlay-end overlay)))))
                                (cl-remove-if-not
                                 (lambda (overlay) (eq (overlay-buffer overlay) (current-buffer)))
-                                (reverse (agent-shell-window--session-overlays session))))))))))))))
+                                (reverse (agent-shell-window--session-overlays session)))))))))))))))
 
 (provide 'agent-shell-window)
 ;;; agent-shell-window.el ends here
