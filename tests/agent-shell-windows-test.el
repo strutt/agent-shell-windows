@@ -114,7 +114,7 @@
                 (agent-shell-windows--display-buffer (lambda (_) (selected-window))
                                                    (current-buffer))
                 (should (compare-window-configurations before (current-window-configuration)))
-                (agent-shell-windows--show-files
+                (agent-shell-windows--show-panes
                  session `((panes . [((pane . 1)
                                       (file . ,(file-name-nondirectory file))
                                       (highlights . [])

@@ -165,36 +165,36 @@
             collect `((pane . ,id) (file . ,file) (highlights . [])
                       (viewport . ((top_line . ,(+ 1 (* 10 id)))))))))
 
-(ert-deftest agent-shell-windows-show-files-replaces-entire-display ()
+(ert-deftest agent-shell-windows-show-panes-replaces-entire-display ()
   (agent-shell-windows-test--with-session
    (let ((selected (selected-window)))
-     (agent-shell-windows--show-files
+     (agent-shell-windows--show-panes
       session `((panes . ,(agent-shell-windows-test--requests "one.el" "two.el" "one.el"))))
      (should (eq selected (selected-window))))
    (should (= 3 (length (agent-shell-windows--windows session))))
-   (agent-shell-windows--show-files
+   (agent-shell-windows--show-panes
     session `((panes . ,(agent-shell-windows-test--requests "two.el"))))
    (should (equal "two.el" (agent-shell-windows-test--file session 1)))
    (should (= 1 (length (agent-shell-windows--windows session))))))
 
-(ert-deftest agent-shell-windows-show-files-validates-before-changing-display ()
+(ert-deftest agent-shell-windows-show-panes-validates-before-changing-display ()
   (agent-shell-windows-test--with-session
-   (agent-shell-windows--show-files
+   (agent-shell-windows--show-panes
     session `((panes . ,(agent-shell-windows-test--requests "one.el"))))
    (dolist (requests (list []
                            (agent-shell-windows-test--requests "two.el" "missing.el")
                            (agent-shell-windows-test--requests "two.el" "../outside.el")))
-     (should-error (agent-shell-windows--show-files session `((panes . ,requests))))
+     (should-error (agent-shell-windows--show-panes session `((panes . ,requests))))
      (should (= 1 (agent-shell-windows--session-count session)))
      (should (equal "one.el" (agent-shell-windows-test--file session 1))))
    (let ((requests (agent-shell-windows-test--requests "one.el" "two.el")))
      (setf (alist-get 'pane (aref requests 1)) 1)
-     (should-error (agent-shell-windows--show-files session `((panes . ,requests)))))
+     (should-error (agent-shell-windows--show-panes session `((panes . ,requests)))))
    (let ((requests (agent-shell-windows-test--requests "one.el")))
      (setf (alist-get 'top_line (alist-get 'viewport (aref requests 0))) 0)
-     (should-error (agent-shell-windows--show-files session `((panes . ,requests)))))))
+     (should-error (agent-shell-windows--show-panes session `((panes . ,requests)))))))
 
-(ert-deftest agent-shell-windows-show-files-hidden-display-is-one-snapshot ()
+(ert-deftest agent-shell-windows-show-panes-hidden-display-is-one-snapshot ()
   (agent-shell-windows-test--with-session
    (agent-shell-windows--save session)
    (agent-shell-windows--remove-display session)
@@ -202,9 +202,9 @@
      (unwind-protect
          (progn
            (switch-to-buffer away)
-           (agent-shell-windows--show-files
+           (agent-shell-windows--show-panes
             session `((panes . ,(agent-shell-windows-test--requests "one.el" "one.el" "one.el"))))
-           (agent-shell-windows--show-files
+           (agent-shell-windows--show-panes
             session `((panes . ,(agent-shell-windows-test--requests "two.el" "one.el"))))
            (should (eq away (window-buffer (selected-window))))
            (should-not (agent-shell-windows--shell-window session))
@@ -216,7 +216,7 @@
 
 (ert-deftest agent-shell-windows-three-pane-layout-restores-after-close ()
   (agent-shell-windows-test--with-session
-   (agent-shell-windows--show-files
+   (agent-shell-windows--show-panes
     session `((panes . ,(agent-shell-windows-test--requests "one.el" "two.el" "one.el"))))
    (agent-shell-windows--save session)
    (delete-window (agent-shell-windows--display-window session 2))
@@ -228,7 +228,7 @@
 
 (ert-deftest agent-shell-windows-switch-from-dedicated-pane ()
   (agent-shell-windows-test--with-session
-   (agent-shell-windows--show-files
+   (agent-shell-windows--show-panes
     session `((panes . ,(agent-shell-windows-test--requests "one.el" "two.el"))))
    (select-window (agent-shell-windows--display-window session 2))
    (agent-shell-windows--switch-buffer (lambda () (switch-to-buffer shell)))
@@ -236,7 +236,7 @@
 
 (ert-deftest agent-shell-windows-session-panes-restore-independently ()
   (agent-shell-windows-test--with-session
-   (agent-shell-windows--show-files
+   (agent-shell-windows--show-panes
     session `((panes . ,(agent-shell-windows-test--requests "one.el" "two.el"))))
    (let* ((shell-two (generate-new-buffer " *asw-second-session*"))
           (second (agent-shell-windows--make-session
@@ -248,7 +248,7 @@
            (with-current-buffer shell-two (setq-local agent-shell-windows--session second))
            (agent-shell-windows--save session)
            (agent-shell-windows--layout second t)
-           (agent-shell-windows--show-files
+           (agent-shell-windows--show-panes
             second `((panes . ,(agent-shell-windows-test--requests "two.el" "one.el" "two.el"))))
            (agent-shell-windows--save second)
            (agent-shell-windows--enter session (current-window-configuration) second)
@@ -275,9 +275,9 @@
 
 (provide 'agent-shell-windows-panes-test)
 
-(ert-deftest agent-shell-windows-show-files-returns-visible-line-ranges ()
+(ert-deftest agent-shell-windows-show-panes-returns-visible-line-ranges ()
   (agent-shell-windows-test--with-session
-   (let* ((result (agent-shell-windows--show-files
+   (let* ((result (agent-shell-windows--show-panes
                    session `((panes . ,(agent-shell-windows-test--requests "one.el" "two.el")))))
           (panes (alist-get 'panes result)))
      (should (equal "visible" (alist-get 'status result)))
@@ -291,18 +291,18 @@
          (should (<= (alist-get 'bottom_line viewport) 120)))))
    ;; The last visible line is inclusive; the trailing newline adds no line.
    (with-temp-file (expand-file-name "short.el" root) (insert "one\ntwo\n"))
-   (let* ((result (agent-shell-windows--show-files
+   (let* ((result (agent-shell-windows--show-panes
                    session '((panes . [((pane . 1) (file . "short.el")
                                         (highlights . []) (viewport . ((top_line . 1))))]))))
           (viewport (alist-get 'viewport (aref (alist-get 'panes result) 0))))
      (should (equal '((top_line . 1) (bottom_line . 2)) viewport)))))
 
-(ert-deftest agent-shell-windows-show-files-hidden-response ()
+(ert-deftest agent-shell-windows-show-panes-hidden-response ()
   (agent-shell-windows-test--with-session
    (agent-shell-windows--remove-display session)
    (switch-to-buffer (get-buffer-create " *asw-hidden-response*"))
    (unwind-protect
-       (let ((result (agent-shell-windows--show-files
+       (let ((result (agent-shell-windows--show-panes
                       session `((panes . ,(agent-shell-windows-test--requests "one.el" "two.el"))))))
          (should (equal '((status . "hidden") (panes . [((pane . 1)) ((pane . 2))])) result))
          (should-not (agent-shell-windows--windows session)))

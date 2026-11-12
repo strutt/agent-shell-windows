@@ -674,7 +674,7 @@ Coordinates past the end of the line or buffer clamp to the line."
                            (bottom_line . ,(line-number-at-pos
                                             (max start (1- end)) t)))))))))))
 
-(defun agent-shell-windows--show-files (session arguments)
+(defun agent-shell-windows--show-panes (session arguments)
   "Replace SESSION's complete display with ARGUMENTS' ordered panes array."
   (unless (agent-shell-windows--session-active session)
     (user-error "This window session is stopped; start it through Emacs"))

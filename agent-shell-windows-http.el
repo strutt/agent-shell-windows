@@ -61,7 +61,7 @@ Changes take effect on the next agent startup or connection setup."
                                            (additionalProperties . :json-false)))))
                  (required . ["pane" "file" "highlights" "viewport"])
                  (additionalProperties . :json-false))))
-    `[((name . "show_files")
+    `[((name . "show_panes")
        (description . "Replace this conversation's entire file display in one call. Supply 1 to 3 complete panes, ordered and numbered 1, 2, 3. Each call specifies every file, all highlights, and viewport.top_line; omitted panes close. Emacs chooses layout: 1 standard split; 2 subdivides the file area; 3 a 2×2 grid with chat. Use [] to clear a pane's highlights. Hidden sessions retain the latest complete display until you return. Returns display status and each pane's actual viewport.top_line and viewport.bottom_line (inclusive). Hidden panes return their IDs. Cannot activate a stopped session.")
        (inputSchema . ((type . "object")
                        (properties . ((panes . ((type . "array") (minItems . 1) (maxItems . 3)
@@ -104,7 +104,7 @@ Changes take effect on the next agent startup or connection setup."
      (alist-get 'required schema))
     (condition-case err
         (let ((result
-               (agent-shell-windows--show-files session arguments)))
+               (agent-shell-windows--show-panes session arguments)))
           `((content . [((type . "text")
                          (text . ,(agent-shell-windows-http--json result)))])))
       ((error quit)
@@ -124,7 +124,7 @@ Changes take effect on the next agent startup or connection setup."
        (capabilities . ((tools . ((listChanged . :json-false)))))
        (serverInfo . ((name . "agent-shell-windows") (version . "0.1.0")))
        (instructions . ,(concat
-                         "Use show_files to specify this conversation's entire file display in one call. "
+                         "Use show_panes to specify this conversation's entire file display in one call. "
                          "Always supply a panes array of 1 to 3 complete entries, ordered and numbered 1, 2, 3. "
                          "Each entry supplies pane, file, highlights, and viewport.top_line; omitted panes close. "
                          "Emacs chooses the layout from the count. No separate pane setup is needed. "
