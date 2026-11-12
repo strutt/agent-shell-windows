@@ -14,6 +14,7 @@
 
 (require 'cl-lib)
 (require 'subr-x)
+(require 'agent-shell)
 
 (defgroup agent-shell-windows nil
   "View files beside an agent-shell conversation."
@@ -93,6 +94,17 @@ different address, such as http://host.docker.internal:8765/mcp."
   (require 'agent-shell-windows-http)
   (agent-shell-windows-http--ensure))
 
+(defun agent-shell-windows--before-agent-start (&rest _arguments)
+  "Ensure the shared listener exists before agent-shell starts a shell.
+Keep agent startup available if the listener cannot be started."
+  (condition-case err
+      (agent-shell-windows--ensure-server)
+    ((error quit)
+     (display-warning
+      'agent-shell-windows
+      (format "Could not start the file-viewing server: %s"
+              (error-message-string err))))))
+
 (defun agent-shell-windows--mcp-servers (servers)
   "Append this shell's MCP connection to normalized SERVERS.
 A failure here must not prevent the session from starting, so on
@@ -119,6 +131,8 @@ error the shell proceeds without file viewing."
      servers)))
 
 (with-eval-after-load 'agent-shell
+  ;; The mode hook runs after ACP startup, too late to prepare the listener.
+  (advice-add 'agent-shell--start :before #'agent-shell-windows--before-agent-start)
   (advice-add 'agent-shell--mcp-servers :filter-return
               #'agent-shell-windows--mcp-servers)
   (advice-add 'agent-shell-switch-buffer :around #'agent-shell-windows--switch-buffer)
