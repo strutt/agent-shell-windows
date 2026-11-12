@@ -126,3 +126,31 @@
                                  (window-buffer (agent-shell-windows--display-window session)))))))))
         (when-let* ((buffer (find-buffer-visiting file))) (kill-buffer buffer))
         (delete-file file)))))
+
+(ert-deftest agent-shell-windows-killing-shell-kills-pane-buffers ()
+  (let ((agent-shell-windows--sessions (make-hash-table :test #'equal))
+        (shell (generate-new-buffer " *asw-cleanup-shell*"))
+        (buffers (list (generate-new-buffer " *asw-cleanup-one*")
+                       (generate-new-buffer " *asw-cleanup-two*")))
+        session overlay)
+    (unwind-protect
+        (progn
+          (with-current-buffer shell
+            (setq major-mode 'agent-shell-mode)
+            (setq session (agent-shell-windows--register)))
+          (setf (agent-shell-windows--session-count session) 3)
+          (cl-loop for id from 1 to 3
+                   for buffer in (list (car buffers) (cadr buffers) (car buffers))
+                   do (setf (agent-shell-windows--pane-buffer
+                             (agent-shell-windows--pane session id)) buffer))
+          (setq overlay (make-overlay 1 1 (car buffers)))
+          (setf (agent-shell-windows--pane-overlays (agent-shell-windows--pane session 1))
+                (list overlay))
+          (kill-buffer shell)
+          (dolist (buffer buffers) (should-not (buffer-live-p buffer)))
+          (should-not (overlay-buffer overlay))
+          (should-not (gethash (agent-shell-windows--session-id session)
+                               agent-shell-windows--sessions)))
+      (when (buffer-live-p shell) (kill-buffer shell))
+      (dolist (buffer buffers)
+        (when (buffer-live-p buffer) (kill-buffer buffer))))))

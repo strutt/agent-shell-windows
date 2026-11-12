@@ -83,12 +83,17 @@ different address, such as http://host.docker.internal:8765/mcp."
   (aref (agent-shell-windows--session-panes session) (1- id)))
 
 (defun agent-shell-windows--unregister ()
-  "Remove the current shell's routing association and all pane highlights."
-  (when agent-shell-windows--session
-    (mapc (lambda (pane) (mapc #'delete-overlay (agent-shell-windows--pane-overlays pane)))
-          (agent-shell-windows--session-panes agent-shell-windows--session))
-    (remhash (agent-shell-windows--session-id agent-shell-windows--session)
-             agent-shell-windows--sessions)))
+  "Remove the current shell's routing association, highlights and pane buffers."
+  (when-let* ((session agent-shell-windows--session))
+    (remhash (agent-shell-windows--session-id session)
+             agent-shell-windows--sessions)
+    (mapc (lambda (pane)
+            (mapc #'delete-overlay (agent-shell-windows--pane-overlays pane))
+            (let ((buffer (agent-shell-windows--pane-buffer pane)))
+              (when (and (buffer-live-p buffer)
+                         (not (eq buffer (current-buffer))))
+                (kill-buffer buffer))))
+          (agent-shell-windows--session-panes session))))
 
 (defun agent-shell-windows--ensure-server ()
   "Ensure the shared HTTP server is running."
