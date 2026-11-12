@@ -38,7 +38,9 @@
           (text (alist-get 'text (aref (alist-get 'content result) 0)))
           (view (json-parse-string text :object-type 'alist)))
      (should-not (alist-get 'isError result))
-     (should (equal '((status . "visible") (count . 2)) view))
+     (should (equal "visible" (alist-get 'status view)))
+     (should (= 2 (length (alist-get 'panes view))))
+     (should (alist-get 'viewport (aref (alist-get 'panes view) 0)))
      (should (equal "one.el" (agent-shell-windows-test--file session 1)))
      (should (equal "two.el" (agent-shell-windows-test--file session 2))))
    (let ((reply (agent-shell-windows-http--call-tool

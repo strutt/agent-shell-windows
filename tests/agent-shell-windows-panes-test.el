@@ -274,3 +274,36 @@
       (should (= (nth 3 chat) (nth 1 file))))))
 
 (provide 'agent-shell-windows-panes-test)
+
+(ert-deftest agent-shell-windows-show-files-returns-visible-line-ranges ()
+  (agent-shell-windows-test--with-session
+   (let* ((result (agent-shell-windows--show-files
+                   session `((panes . ,(agent-shell-windows-test--requests "one.el" "two.el")))))
+          (panes (alist-get 'panes result)))
+     (should (equal "visible" (alist-get 'status result)))
+     (should (= 2 (length panes)))
+     (dotimes (index 2)
+       (let* ((pane (aref panes index))
+              (viewport (alist-get 'viewport pane)))
+         (should (= (1+ index) (alist-get 'pane pane)))
+         (should (= (+ 1 (* 10 (1+ index))) (alist-get 'top_line viewport)))
+         (should (> (alist-get 'bottom_line viewport) (alist-get 'top_line viewport)))
+         (should (<= (alist-get 'bottom_line viewport) 120)))))
+   ;; The last visible line is inclusive; the trailing newline adds no line.
+   (with-temp-file (expand-file-name "short.el" root) (insert "one\ntwo\n"))
+   (let* ((result (agent-shell-windows--show-files
+                   session '((panes . [((pane . 1) (file . "short.el")
+                                        (highlights . []) (viewport . ((top_line . 1))))]))))
+          (viewport (alist-get 'viewport (aref (alist-get 'panes result) 0))))
+     (should (equal '((top_line . 1) (bottom_line . 2)) viewport)))))
+
+(ert-deftest agent-shell-windows-show-files-hidden-response ()
+  (agent-shell-windows-test--with-session
+   (agent-shell-windows--remove-display session)
+   (switch-to-buffer (get-buffer-create " *asw-hidden-response*"))
+   (unwind-protect
+       (let ((result (agent-shell-windows--show-files
+                      session `((panes . ,(agent-shell-windows-test--requests "one.el" "two.el"))))))
+         (should (equal '((status . "hidden") (panes . [((pane . 1)) ((pane . 2))])) result))
+         (should-not (agent-shell-windows--windows session)))
+     (kill-buffer " *asw-hidden-response*"))))

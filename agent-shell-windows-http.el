@@ -62,7 +62,7 @@ Changes take effect on the next agent startup or connection setup."
                  (required . ["pane" "file" "highlights" "viewport"])
                  (additionalProperties . :json-false))))
     `[((name . "show_files")
-       (description . "Replace this conversation's entire file display in one call. Supply 1 to 3 complete panes, ordered and numbered 1, 2, 3. Each call specifies every file, all highlights, and viewport.top_line; omitted panes close. Emacs chooses layout: 1 standard split; 2 subdivides the file area; 3 a 2×2 grid with chat. Use [] to clear a pane's highlights. Hidden sessions retain the latest complete display until you return. Returns display status and pane count. Cannot activate a stopped session.")
+       (description . "Replace this conversation's entire file display in one call. Supply 1 to 3 complete panes, ordered and numbered 1, 2, 3. Each call specifies every file, all highlights, and viewport.top_line; omitted panes close. Emacs chooses layout: 1 standard split; 2 subdivides the file area; 3 a 2×2 grid with chat. Use [] to clear a pane's highlights. Hidden sessions retain the latest complete display until you return. Returns display status and each pane's actual viewport.top_line and viewport.bottom_line (inclusive). Hidden panes return their IDs. Cannot activate a stopped session.")
        (inputSchema . ((type . "object")
                        (properties . ((panes . ((type . "array") (minItems . 1) (maxItems . 3)
                                                 (items . ,pane)))))

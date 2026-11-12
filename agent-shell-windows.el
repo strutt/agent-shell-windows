@@ -658,6 +658,22 @@ Coordinates past the end of the line or buffer clamp to the line."
              (user-error "Highlight endpoints must be [line >= 1, column >= 0]")))))
      highlights)))
 
+(defun agent-shell-windows--pane-viewport (session id)
+  "Return pane ID and its inclusive visible line range for SESSION."
+  (let ((window (and (agent-shell-windows--shell-window session)
+                     (agent-shell-windows--display-window session id))))
+    (if (not window)
+        `((pane . ,id))
+      (with-current-buffer (window-buffer window)
+        (save-restriction
+          (widen)
+          (let* ((start (window-start window))
+                 (end (window-end window t)))
+            `((pane . ,id)
+              (viewport . ((top_line . ,(line-number-at-pos start t))
+                           (bottom_line . ,(line-number-at-pos
+                                            (max start (1- end)) t)))))))))))
+
 (defun agent-shell-windows--show-files (session arguments)
   "Replace SESSION's complete display with ARGUMENTS' ordered panes array."
   (unless (agent-shell-windows--session-active session)
@@ -672,7 +688,9 @@ Coordinates past the end of the line or buffer clamp to the line."
       (agent-shell-windows--set-panes session (length requests))
       (mapc (lambda (request) (agent-shell-windows--show-file session request)) requests))
     `((status . ,(if (agent-shell-windows--shell-window session) "visible" "hidden"))
-      (count . ,(length requests)))))
+      (panes . ,(vconcat
+                 (cl-loop for id from 1 to (length requests)
+                          collect (agent-shell-windows--pane-viewport session id)))))))
 
 (provide 'agent-shell-windows)
 ;;; agent-shell-windows.el ends here
