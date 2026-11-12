@@ -1,0 +1,4 @@
+/.agent-shell/
+*.elc
+*-autoloads.el
+/.claude/settings.local.json
