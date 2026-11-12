@@ -15,8 +15,17 @@
 (require 'web-server)
 
 (defcustom agent-shell-windows-http-host "127.0.0.1"
-  "Address on which the shared HTTP server listens."
+  "Bind address used when `agent-shell-windows-http-hosts' is nil."
   :type 'string
+  :group 'agent-shell-windows)
+
+(defcustom agent-shell-windows-http-hosts nil
+  "Addresses on which the shared HTTP server accepts connections.
+For example, use (\"127.0.0.1\" \"172.17.0.1\") for localhost and a
+Docker bridge address.  Each address gets its own socket on
+`agent-shell-windows-http-port'.  Nil uses `agent-shell-windows-http-host'.
+Changes take effect on the next agent startup or connection setup."
+  :type '(repeat string)
   :group 'agent-shell-windows)
 
 (defcustom agent-shell-windows-http-port 8765
@@ -25,6 +34,9 @@
   :group 'agent-shell-windows)
 
 (defvar agent-shell-windows-http--server nil)
+(defvar agent-shell-windows-http--servers nil
+  "Alist of ((HOST PORT) . SERVER) for the shared MCP endpoint.
+`agent-shell-windows-http--server' holds the first available server.")
 (defconst agent-shell-windows-http--versions '("2025-06-18" "2025-03-26"))
 (define-error 'agent-shell-windows-http--rpc-error "Window MCP protocol error")
 
@@ -270,15 +282,56 @@ web-server 0.1.2 may dispatch before the body has arrived."
        (agent-shell-windows-http--reject process 500 (error-message-string err))))))
 
 (defun agent-shell-windows-http--ensure ()
-  "Start or reuse the shared HTTP MCP listener."
-  (unless (and agent-shell-windows-http--server
+  "Start or reuse MCP listeners for the configured addresses and port.
+Retire sockets removed from the configuration and retry failed sockets.
+An address failure warns without taking down other configured listeners.
+Signal an error if no configured listener could be started."
+  (let* ((hosts (or agent-shell-windows-http-hosts
+                    (list agent-shell-windows-http-host)))
+         (port agent-shell-windows-http-port)
+         keys failures)
+    (unless (and (listp hosts)
+                 (cl-every (lambda (host) (and (stringp host) (not (string-empty-p host)))) hosts))
+      (user-error "HTTP hosts must be a list of nonempty address strings"))
+    (setq keys (mapcar (lambda (host) (list host port)) (delete-dups (copy-sequence hosts))))
+    ;; Adopt a listener from the earlier single-address implementation on reload.
+    (when (and (null agent-shell-windows-http--servers)
+               agent-shell-windows-http--server
                (process-live-p (ws-process agent-shell-windows-http--server)))
+      (let ((process (ws-process agent-shell-windows-http--server)))
+        (push (cons (list (process-contact process :host) (process-contact process :service))
+                    agent-shell-windows-http--server)
+              agent-shell-windows-http--servers)))
+    (setq agent-shell-windows-http--servers
+          (cl-delete-if
+           (lambda (entry)
+             (let ((process (ws-process (cdr entry))))
+               (if (and (member (car entry) keys) (process-live-p process))
+                   nil
+                 (when (process-live-p process) (delete-process process))
+                 t)))
+           agent-shell-windows-http--servers))
+    (dolist (key keys)
+      (unless (assoc key agent-shell-windows-http--servers)
+        (let (server)
+          (condition-case err
+              (progn
+                (setq server (ws-start #'agent-shell-windows-http--handle
+                                       port nil :host (car key)))
+                (set-process-filter (ws-process server) #'agent-shell-windows-http--filter)
+                (push (cons key server) agent-shell-windows-http--servers))
+            (error
+             (when (and server (process-live-p (ws-process server)))
+               (delete-process (ws-process server)))
+             (push (format "%s:%s (%s)" (car key) port (error-message-string err)) failures))))))
     (setq agent-shell-windows-http--server
-          (ws-start #'agent-shell-windows-http--handle
-                    agent-shell-windows-http-port nil :host agent-shell-windows-http-host))
-    (set-process-filter (ws-process agent-shell-windows-http--server)
-                        #'agent-shell-windows-http--filter))
-  agent-shell-windows-http--server)
+          (cl-loop for key in keys
+                   thereis (cdr (assoc key agent-shell-windows-http--servers))))
+    (unless agent-shell-windows-http--server
+      (error "No MCP listener available: %s" (string-join (nreverse failures) "; ")))
+    (dolist (failure (nreverse failures))
+      (display-warning 'agent-shell-windows (concat "Could not start MCP listener on " failure)))
+    agent-shell-windows-http--server))
 
 (provide 'agent-shell-windows-http)
 ;;; agent-shell-windows-http.el ends here

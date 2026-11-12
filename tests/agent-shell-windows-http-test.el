@@ -50,6 +50,8 @@
 
 (ert-deftest agent-shell-windows-server-start-is-idempotent ()
   (let ((agent-shell-windows-http--server nil)
+        (agent-shell-windows-http--servers nil)
+        (agent-shell-windows-http-hosts nil)
         (agent-shell-windows-http-port 0)
         (agent-shell-windows-http-host "127.0.0.1"))
     (unwind-protect
@@ -65,3 +67,104 @@
             (should (eq first agent-shell-windows-http--server))))
       (when agent-shell-windows-http--server
         (delete-process (ws-process agent-shell-windows-http--server))))))
+
+(defmacro agent-shell-windows-test--with-listeners (&rest body)
+  "Run BODY with isolated MCP listeners on loopback addresses."
+  (declare (indent 0))
+  `(let ((agent-shell-windows-http--server nil)
+         (agent-shell-windows-http--servers nil)
+         (agent-shell-windows-http-hosts '("127.0.0.1"))
+         (agent-shell-windows-http-port 0))
+     (unwind-protect (progn ,@body)
+       (dolist (entry agent-shell-windows-http--servers)
+         (let ((process (ws-process (cdr entry))))
+           (when (process-live-p process) (delete-process process)))))))
+
+(ert-deftest agent-shell-windows-multiple-hosts-share-port-and-reuse-sockets ()
+  (agent-shell-windows-test--with-listeners
+    (agent-shell-windows-http--ensure)
+    (setq agent-shell-windows-http-port
+          (process-contact (ws-process agent-shell-windows-http--server) :service)
+          agent-shell-windows-http-hosts '("127.0.0.1" "127.0.0.2" "127.0.0.1"))
+    (agent-shell-windows-http--ensure)
+    (should (= 2 (length agent-shell-windows-http--servers)))
+    (let ((servers (copy-sequence agent-shell-windows-http--servers)))
+      (agent-shell-windows-http--ensure)
+      (should (equal servers agent-shell-windows-http--servers))
+      (dolist (entry servers)
+        (let ((process (ws-process (cdr entry))))
+          (should (process-live-p process))
+          (should (equal (caar entry) (process-contact process :host)))
+          (should (= agent-shell-windows-http-port (process-contact process :service)))
+          (should (eq #'agent-shell-windows-http--filter (process-filter process))))))))
+
+(ert-deftest agent-shell-windows-recreates-only-stopped-listeners ()
+  (agent-shell-windows-test--with-listeners
+    (setq agent-shell-windows-http-hosts '("127.0.0.1" "127.0.0.2"))
+    (agent-shell-windows-http--ensure)
+    (let ((first (cdr (assoc '("127.0.0.1" 0) agent-shell-windows-http--servers)))
+          (second (cdr (assoc '("127.0.0.2" 0) agent-shell-windows-http--servers))))
+      (delete-process (ws-process second))
+      (agent-shell-windows-http--ensure)
+      (should (eq first (cdr (assoc '("127.0.0.1" 0) agent-shell-windows-http--servers))))
+      (should-not (eq second (cdr (assoc '("127.0.0.2" 0) agent-shell-windows-http--servers))))
+      (should (= 2 (length agent-shell-windows-http--servers))))))
+
+(ert-deftest agent-shell-windows-removes-unconfigured-listeners ()
+  (agent-shell-windows-test--with-listeners
+    (setq agent-shell-windows-http-hosts '("127.0.0.1" "127.0.0.2"))
+    (agent-shell-windows-http--ensure)
+    (let ((removed (cdr (assoc '("127.0.0.2" 0) agent-shell-windows-http--servers))))
+      (setq agent-shell-windows-http-hosts '("127.0.0.1"))
+      (agent-shell-windows-http--ensure)
+      (should (= 1 (length agent-shell-windows-http--servers)))
+      (should-not (process-live-p (ws-process removed))))))
+
+(ert-deftest agent-shell-windows-partial-bind-failure-retains-working-server ()
+  (agent-shell-windows-test--with-listeners
+    (setq agent-shell-windows-http-hosts '("127.0.0.2" "127.0.0.1"))
+    (let ((start (symbol-function 'ws-start)) warning)
+      (cl-letf (((symbol-function 'ws-start)
+                 (lambda (handler port &rest args)
+                   (if (equal "127.0.0.2" (plist-get (cdr args) :host))
+                       (error "Address unavailable")
+                     (apply start handler port args))))
+                ((symbol-function 'display-warning)
+                 (lambda (_type message &rest _) (setq warning message))))
+        (should (agent-shell-windows-http--ensure))
+        (should (string-match-p "127.0.0.2" warning))
+        (should (= 1 (length agent-shell-windows-http--servers)))
+        (let ((first agent-shell-windows-http--server))
+          (agent-shell-windows-http--ensure)
+          (should (eq first agent-shell-windows-http--server)))))
+    ;; A later startup retries the unavailable address.
+    (agent-shell-windows-http--ensure)
+    (should (= 2 (length agent-shell-windows-http--servers)))))
+
+(ert-deftest agent-shell-windows-all-bind-failures-report-error ()
+  (agent-shell-windows-test--with-listeners
+    (cl-letf (((symbol-function 'ws-start) (lambda (&rest _) (error "Address unavailable"))))
+      (should-error (agent-shell-windows-http--ensure)))
+    (should-not agent-shell-windows-http--servers)
+    (should-not agent-shell-windows-http--server)))
+
+(ert-deftest agent-shell-windows-adopts-existing-single-listener ()
+  (agent-shell-windows-test--with-listeners
+    (setq agent-shell-windows-http--server
+          (ws-start #'agent-shell-windows-http--handle 0 nil :host "127.0.0.1")
+          agent-shell-windows-http-port
+          (process-contact (ws-process agent-shell-windows-http--server) :service))
+    (let ((first agent-shell-windows-http--server))
+      (agent-shell-windows-http--ensure)
+      (should (eq first agent-shell-windows-http--server))
+      (should (= 1 (length agent-shell-windows-http--servers))))))
+
+(ert-deftest agent-shell-windows-invalid-hosts-leave-listeners-alone ()
+  (agent-shell-windows-test--with-listeners
+    (agent-shell-windows-http--ensure)
+    (let ((first agent-shell-windows-http--server))
+      (dolist (invalid '("127.0.0.1" ("") (1)))
+        (setq agent-shell-windows-http-hosts invalid)
+        (should-error (agent-shell-windows-http--ensure))
+        (should (eq first agent-shell-windows-http--server))
+        (should (process-live-p (ws-process first)))))))
