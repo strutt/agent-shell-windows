@@ -44,3 +44,27 @@
       (with-current-buffer base (set-buffer-modified-p nil))
       (kill-buffer base)
       (delete-file file))))
+
+(ert-deftest agent-shell-window-dedicates-file-pane ()
+  (save-window-excursion
+    (let* ((shell (generate-new-buffer " *asw-dedication-shell*"))
+           (other (generate-new-buffer " *asw-dedication-other*"))
+           (session (agent-shell-window--make-session
+                     :shell shell :active t :frame (selected-frame)
+                     :root default-directory))
+           (before (current-window-configuration))
+           placeholder)
+      (unwind-protect
+          (let ((window (agent-shell-window--layout session t)))
+            (setq placeholder (window-buffer window))
+            (should (eq t (window-dedicated-p window)))
+            (should-error (set-window-buffer window other))
+            ;; The MCP layout path can still replace the displayed file.
+            (setf (agent-shell-window--session-buffer session) other)
+            (agent-shell-window--layout session nil)
+            (should (eq other (window-buffer window)))
+            (should (eq t (window-dedicated-p window))))
+        (set-window-configuration before)
+        (when (buffer-live-p placeholder) (kill-buffer placeholder))
+        (kill-buffer other)
+        (kill-buffer shell)))))

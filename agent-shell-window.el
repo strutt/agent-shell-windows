@@ -339,7 +339,9 @@ error the shell proceeds without file viewing."
                         (split-window chat nil 'right))))
         (set-window-parameter window 'agent-shell-window-session session)
         (set-window-dedicated-p window nil)
-        (set-window-buffer window view)
+        (unwind-protect
+            (set-window-buffer window view)
+          (set-window-dedicated-p window t))
         (agent-shell-window--set-header session window)
         (setf (agent-shell-window--session-window session) window)
         (dolist (overlay (agent-shell-window--session-overlays session))
