@@ -24,18 +24,19 @@ buffer itself).
 
 The agent controls the files, the viewport and can highlight regions.
 
-The dedicated window group will be shown when you invoke
-`agent-shell-switch-buffer` or use `agent-shell-toggle` to show the conversation.
+Windows appear when the agent first asks to show files. Starting a session
+leaves your frame unchanged. Use `agent-shell-switch-buffer` or
+`agent-shell-toggle` to return to the conversation and restore its file windows.
 
 Ask it to show the code it's written or screenshots it's created, it's a nice
 experience.
 
 ## Some useful functions
 
-`agent-shell-windows-stop` disables windows for the current
-conversation, leaving the MCP server running for other agent-shell
-sessions.  `agent-shell-windows-start` (re-)enables file viewing for a
-conversation. (You don't need to call `agent-shell-windows-start` initially).
+`agent-shell-windows-stop` disables agent control of file windows for the
+current conversation, leaving its existing windows in place and the MCP server
+running. `agent-shell-windows-start` re-enables file viewing. New conversations
+enable file viewing automatically.
 
 
 ## How it works
@@ -44,7 +45,7 @@ I don't trust agents enough to give them routine access to my
 credentials or my Emacs. Emacs contains the keys to my kingdom. To
 avoid using emacsclient, agent-shell-windows starts a local web server
 on http://localhost:8765/mcp. The server limits that agent to opening
-files in those windows and reading the live unsaved content.
+existing files in those windows within the session's working directory.
 
 Agents that aren't in containers have access to your cli. Their
 commands use YOUR credentials. They'll promise they would never, ever
@@ -71,5 +72,5 @@ only listens on localhost (127.0.0.1).
       '("127.0.0.1" "172.17.0.1"))
 ```
 
-Here, `172.17.0.1` is an example Docker bridge IP; replace it with your
-host's Docker bridge address.
+`172.17.0.1` is an example. Replace it with your host's Docker bridge
+address.
