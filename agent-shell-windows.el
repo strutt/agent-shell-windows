@@ -195,7 +195,7 @@ error the shell proceeds without file viewing."
   (when (buffer-live-p buffer)
     (with-current-buffer buffer
       (or agent-shell-windows--session
-          (when-let ((shell (agent-shell--current-shell)))
+          (when-let* ((shell (agent-shell--current-shell)))
             (buffer-local-value 'agent-shell-windows--session shell))))))
 
 (defun agent-shell-windows--visible-session ()
@@ -247,7 +247,7 @@ error the shell proceeds without file viewing."
     (unless (eq frame (window-configuration-frame before))
       (set-window-configuration before))
     (select-frame-set-input-focus frame)
-    (if-let ((configuration (agent-shell-windows--session-configuration session)))
+    (if-let* ((configuration (agent-shell-windows--session-configuration session)))
         (set-window-configuration configuration)
       (agent-shell-windows--layout session t))
     ;; Older snapshots, or snapshots whose view buffer was killed, may
@@ -304,9 +304,9 @@ error the shell proceeds without file viewing."
     (when (and previous (frame-live-p (window-configuration-frame previous)))
       (set-window-configuration previous)
       ;; Activation may have happened after the chat was already displayed.
-      (when-let ((window (get-buffer-window (agent-shell-windows--session-shell session))))
+      (when-let* ((window (get-buffer-window (agent-shell-windows--session-shell session))))
         (quit-restore-window window 'bury))
-      (when-let ((restored (agent-shell-windows--visible-session)))
+      (when-let* ((restored (agent-shell-windows--visible-session)))
         (agent-shell-windows--refresh-view restored)))))
 
 (defun agent-shell-windows--toggle (original &rest arguments)
@@ -517,7 +517,7 @@ error the shell proceeds without file viewing."
                 (agent-shell-windows--session-panes session)))
         (unless (frame-live-p (agent-shell-windows--session-frame session))
           (setf (agent-shell-windows--session-frame session)
-                (or (when-let ((window (get-buffer-window (current-buffer) 'visible)))
+                (or (when-let* ((window (get-buffer-window (current-buffer) 'visible)))
                       (window-frame window))
                     (selected-frame))))
         (setf (agent-shell-windows--session-active session) t)
@@ -536,7 +536,7 @@ error the shell proceeds without file viewing."
 
 (defun agent-shell-windows--required (key object)
   "Return KEY in OBJECT, signaling an error when it is absent."
-  (if-let ((entry (assq key object)))
+  (if-let* ((entry (assq key object)))
       (cdr entry)
     (error "Missing required value: %s" key)))
 
