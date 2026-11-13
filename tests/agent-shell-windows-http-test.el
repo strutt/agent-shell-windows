@@ -45,7 +45,17 @@
      (should (equal "two.el" (agent-shell-windows-test--file session 2))))
    (let ((reply (agent-shell-windows-http--call-tool
                  session '((name . "show_panes") (arguments . ((panes . [])))))))
-     (should (alist-get 'isError reply)))))
+     (should-not (alist-get 'isError reply))
+     (let* ((text (alist-get 'text (aref (alist-get 'content reply) 0)))
+            (view (json-parse-string text :object-type 'alist)))
+       (should (equal [] (alist-get 'panes view))))
+     (should-not (agent-shell-windows--windows session)))))
+
+(ert-deftest agent-shell-windows-http-schema-allows-empty-panes ()
+  (let* ((tool (aref agent-shell-windows-http--tools 0))
+         (schema (alist-get 'inputSchema tool))
+         (panes (alist-get 'panes (alist-get 'properties schema))))
+    (should (= 0 (alist-get 'minItems panes)))))
 
 (provide 'agent-shell-windows-http-test)
 

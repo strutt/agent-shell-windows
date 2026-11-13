@@ -62,9 +62,9 @@ Changes take effect on the next agent startup or connection setup."
                  (required . ["pane" "file" "highlights" "viewport"])
                  (additionalProperties . :json-false))))
     `[((name . "show_panes")
-       (description . "Replace this conversation's entire file display in one call. Supply 1 to 3 complete panes, ordered and numbered 1, 2, 3. Each call specifies every file, all highlights, and viewport.top_line; omitted panes close. Emacs chooses layout: 1 standard split; 2 subdivides the file area; 3 a 2×2 grid with chat. Use [] to clear a pane's highlights. Hidden sessions retain the latest complete display until you return. Returns display status and each pane's actual viewport.top_line and viewport.bottom_line (inclusive). Hidden panes return their IDs. Cannot activate a stopped session.")
+       (description . "Replace this conversation's entire file display in one call. Supply 0 to 3 complete panes; an empty panes array closes all file panes while keeping the conversation open. Nonempty panes are ordered and numbered 1, 2, 3. Each call specifies every file, all highlights, and viewport.top_line; omitted panes close. Emacs chooses layout: 1 standard split; 2 subdivides the file area; 3 a 2×2 grid with chat. Use [] to clear a pane's highlights. Hidden sessions retain the latest complete display until you return. Returns display status and each pane's actual viewport.top_line and viewport.bottom_line (inclusive). Hidden panes return their IDs. Cannot activate a stopped session.")
        (inputSchema . ((type . "object")
-                       (properties . ((panes . ((type . "array") (minItems . 1) (maxItems . 3)
+                       (properties . ((panes . ((type . "array") (minItems . 0) (maxItems . 3)
                                                 (items . ,pane)))))
                        (required . ["panes"])
                        (additionalProperties . :json-false)))
@@ -125,7 +125,7 @@ Changes take effect on the next agent startup or connection setup."
        (serverInfo . ((name . "agent-shell-windows") (version . "0.1.0")))
        (instructions . ,(concat
                          "Use show_panes to specify this conversation's entire file display in one call. "
-                         "Always supply a panes array of 1 to 3 complete entries, ordered and numbered 1, 2, 3. "
+                         "Always supply a panes array of 0 to 3 complete entries; an empty array closes all file panes. Nonempty entries are ordered and numbered 1, 2, 3. "
                          "Each entry supplies pane, file, highlights, and viewport.top_line; omitted panes close. "
                          "Emacs chooses the layout from the count. No separate pane setup is needed. "
                          "All paths are relative to the associated shell's working directory. "

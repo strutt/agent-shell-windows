@@ -3,6 +3,8 @@
 Let an agent show you files beside its conversation in a dedicated window group
 in Emacs.
 
+![Demo of agent-shell-windows showing different pane layouts and highlighted code](docs/demo.gif)
+
 ## Prerequisites
 
 - Emacs 29.1+
@@ -23,6 +25,8 @@ The agent can ask for up to 3 agent-shell-windows (grouped with the agent-shell
 buffer itself).
 
 The agent controls the files, the viewport and can highlight regions.
+It can close leaving the conversation open, then show files again when
+needed.
 
 Windows appear when the agent first asks to show files. Starting a session
 leaves your frame unchanged. Use `agent-shell-switch-buffer` or

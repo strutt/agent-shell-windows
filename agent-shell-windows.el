@@ -198,11 +198,12 @@ error the shell proceeds without file viewing."
 
 (defun agent-shell-windows--has-display-p (session)
   "Return non-nil when SESSION has a saved or requested display."
-  (or (agent-shell-windows--session-configuration session)
-      (cl-some (lambda (pane)
-                 (or (agent-shell-windows--pane-buffer pane)
-                     (agent-shell-windows--pane-request pane)))
-               (append (agent-shell-windows--session-panes session) nil))))
+  (and (> (agent-shell-windows--session-count session) 0)
+       (or (agent-shell-windows--session-configuration session)
+           (cl-some (lambda (pane)
+                      (or (agent-shell-windows--pane-buffer pane)
+                          (agent-shell-windows--pane-request pane)))
+                    (append (agent-shell-windows--session-panes session) nil)))))
 
 (defun agent-shell-windows--buffer-session (buffer)
   "Return BUFFER's association, resolving an agent-shell viewport if needed."
@@ -479,14 +480,15 @@ error the shell proceeds without file viewing."
         (let ((window (agent-shell-windows--display-window session (1+ index))))
           (agent-shell-windows--attach-pane session (1+ index) window)))
       (agent-shell-windows--save session)
-      (agent-shell-windows--display-window session 1))))
+      (when (> count 0)
+        (agent-shell-windows--display-window session 1)))))
 
 (defun agent-shell-windows--set-panes (session count)
-  "Configure SESSION for COUNT file panes, from 1 to 3."
+  "Configure SESSION for COUNT file panes, from 0 to 3."
   (unless (agent-shell-windows--session-active session)
     (user-error "This window session is stopped; start it through Emacs"))
-  (unless (and (integerp count) (<= 1 count 3))
-    (user-error "Pane count must be 1, 2, or 3"))
+  (unless (and (integerp count) (<= 0 count 3))
+    (user-error "Pane count must be 0, 1, 2, or 3"))
   (let ((old-count (agent-shell-windows--session-count session))
         (before (current-window-configuration
                  (if (frame-live-p (agent-shell-windows--session-frame session))
@@ -505,6 +507,8 @@ error the shell proceeds without file viewing."
        (set-window-configuration before)
        (agent-shell-windows--refresh-view session)
        (signal (car err) (cdr err))))
+    (when (= count 0)
+      (setf (agent-shell-windows--session-configuration session) nil))
     ;; Removed panes must never leave highlights on ordinary file windows.
     (cl-loop for id from (1+ count) to 3
              for pane = (aref (agent-shell-windows--session-panes session) (1- id))
@@ -684,8 +688,8 @@ Coordinates past the end of the line or buffer clamp to the line."
   (unless (agent-shell-windows--session-active session)
     (user-error "This window session is stopped; start it through Emacs"))
   (let ((requests (agent-shell-windows--required 'panes arguments)))
-    (unless (and (vectorp requests) (<= 1 (length requests) 3))
-      (user-error "Supply an array of 1 to 3 complete panes"))
+    (unless (and (vectorp requests) (<= 0 (length requests) 3))
+      (user-error "Supply an array of 0 to 3 complete panes"))
     ;; Validate the whole display before changing any windows or requests.
     (cl-loop for request across requests for id from 1
              do (agent-shell-windows--validate-request session request id))

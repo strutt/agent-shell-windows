@@ -103,7 +103,7 @@
 
 (ert-deftest agent-shell-windows-pane-validation ()
   (agent-shell-windows-test--with-session
-   (dolist (count '(0 4 -1 1.5 "2" nil))
+   (dolist (count '(4 -1 1.5 "2" nil))
      (should-error (agent-shell-windows--set-panes session count)))
    (dolist (id '(0 2 4 -1 1.5 "1"))
      (should-error (agent-shell-windows--pane session id)))
@@ -177,11 +177,57 @@
    (should (equal "two.el" (agent-shell-windows-test--file session 1)))
    (should (= 1 (length (agent-shell-windows--windows session))))))
 
+(ert-deftest agent-shell-windows-show-panes-empty-closes-and-can-reopen ()
+  (agent-shell-windows-test--with-session
+   (dolist (count '(1 2 3))
+     (agent-shell-windows--set-panes session count)
+     (agent-shell-windows-test--show session count "one.el" 10)
+     (let ((overlay (car (agent-shell-windows--pane-overlays
+                          (agent-shell-windows--pane session count))))
+           (buffer (find-buffer-visiting (expand-file-name "one.el" root)))
+           (chat (agent-shell-windows--shell-window session)))
+       (dotimes (_ 2)
+         (should (equal '((status . "visible") (panes . []))
+                        (agent-shell-windows--show-panes session '((panes . []))))))
+       (should (window-live-p chat))
+       (should (eq (window-buffer chat) shell))
+       (should-not (agent-shell-windows--windows session))
+       (should-not (overlay-buffer overlay))
+       (should (buffer-live-p buffer))
+       (should (agent-shell-windows--session-active session))
+       ;; Returning to the conversation must not resurrect cleared panes.
+       (agent-shell-windows--enter session (current-window-configuration) nil)
+       (should-not (agent-shell-windows--windows session)))
+     (agent-shell-windows--show-panes
+      session `((panes . ,(agent-shell-windows-test--requests "two.el"))))
+     (should (equal "two.el" (agent-shell-windows-test--file session 1))))))
+
+(ert-deftest agent-shell-windows-show-panes-empty-clears-hidden-display ()
+  (agent-shell-windows-test--with-session
+   (agent-shell-windows-test--show session 1 "one.el" 10)
+   (agent-shell-windows--save session)
+   (agent-shell-windows--remove-display session)
+   (with-temp-buffer
+     (switch-to-buffer (current-buffer))
+     (let ((before (current-window-configuration)))
+       (should (equal '((status . "hidden") (panes . []))
+                      (agent-shell-windows--show-panes session '((panes . [])))))
+       (should (compare-window-configurations before (current-window-configuration))))
+     (agent-shell-windows--enter session (current-window-configuration) nil)
+     (should-not (agent-shell-windows--windows session))
+     (should (agent-shell-windows--shell-window session)))))
+
+(ert-deftest agent-shell-windows-show-panes-empty-respects-stop ()
+  (agent-shell-windows-test--with-session
+   (setf (agent-shell-windows--session-active session) nil)
+   (should-error (agent-shell-windows--show-panes session '((panes . []))))
+   (should (= 1 (length (agent-shell-windows--windows session))))))
+
 (ert-deftest agent-shell-windows-show-panes-validates-before-changing-display ()
   (agent-shell-windows-test--with-session
    (agent-shell-windows--show-panes
     session `((panes . ,(agent-shell-windows-test--requests "one.el"))))
-   (dolist (requests (list []
+   (dolist (requests (list nil
                            (agent-shell-windows-test--requests "two.el" "missing.el")
                            (agent-shell-windows-test--requests "two.el" "../outside.el")))
      (should-error (agent-shell-windows--show-panes session `((panes . ,requests))))
