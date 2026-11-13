@@ -32,7 +32,7 @@
    (let* ((requests (agent-shell-windows-test--requests "one.el" "two.el"))
           (reply (agent-shell-windows-http--reply
                   session `((jsonrpc . "2.0") (id . 1) (method . "tools/call")
-                            (params . ((name . "show_panes")
+                            (params . ((name . "agent_shell_windows")
                                        (arguments . ((panes . ,requests))))))))
           (result (alist-get 'result reply))
           (text (alist-get 'text (aref (alist-get 'content result) 0)))
@@ -44,7 +44,7 @@
      (should (equal "one.el" (agent-shell-windows-test--file session 1)))
      (should (equal "two.el" (agent-shell-windows-test--file session 2))))
    (let ((reply (agent-shell-windows-http--call-tool
-                 session '((name . "show_panes") (arguments . ((panes . [])))))))
+                 session '((name . "agent_shell_windows") (arguments . ((panes . [])))))))
      (should-not (alist-get 'isError reply))
      (let* ((text (alist-get 'text (aref (alist-get 'content reply) 0)))
             (view (json-parse-string text :object-type 'alist)))
@@ -202,7 +202,7 @@
         (should (eq first agent-shell-windows-http--server))
         (should (process-live-p (ws-process first)))))))
 
-(ert-deftest agent-shell-windows-advertises-only-show-panes ()
-  (should (equal '("show_panes")
+(ert-deftest agent-shell-windows-advertises-only-agent-shell-windows ()
+  (should (equal '("agent_shell_windows")
                  (mapcar (lambda (tool) (alist-get 'name tool))
                          (append agent-shell-windows-http--tools nil)))))
