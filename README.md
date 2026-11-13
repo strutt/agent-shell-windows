@@ -1,7 +1,6 @@
 # agent-shell-windows
 
-Let an agent show you files beside its conversation in a dedicated window group
-in Emacs.
+Let an agent show you files adjacent to the agent-shell in Emacs.
 
 ![Demo of agent-shell-windows showing different pane layouts and highlighted code](docs/demo.gif)
 
@@ -21,26 +20,25 @@ in Emacs.
 
 ## What it does
 
-The agent can ask for up to 3 agent-shell-windows (grouped with the agent-shell
-buffer itself).
+From inside agent-shell, the agent can show you files in Emacs. Up to
+3 agent-shell-windows are grouped into a static layout with the
+agent-shell buffer. The agent controls what files are shown, the
+viewport and can highlight regions.
 
-The agent controls the files, the viewport and can highlight regions.
-It can close leaving the conversation open, then show files again when
-needed.
+Ask it to walk you through the code it's written or images, it's a
+nice experience!
 
-Windows appear when the agent first asks to show files. Starting a session
-leaves your frame unchanged. Use `agent-shell-switch-buffer` or
-`agent-shell-toggle` to return to the conversation and restore its file windows.
+If you dismiss the windows for any reason, `agent-shell-switch-buffer`
+and `agent-shell-toggle` will restore window layout.
 
-Ask it to show the code it's written or screenshots it's created, it's a nice
-experience.
 
 ## Some useful functions
 
-`agent-shell-windows-stop` disables agent control of file windows for the
-current conversation, leaving its existing windows in place and the MCP server
-running. `agent-shell-windows-start` re-enables file viewing. New conversations
-enable file viewing automatically.
+`agent-shell-windows-stop` disables agent control of
+agent-shell-windows for the current conversation, leaving its existing
+windows in place and the MCP server running for other
+agents. `agent-shell-windows-start` re-enables. New conversations are
+enabled automatically.
 
 
 ## How it works
